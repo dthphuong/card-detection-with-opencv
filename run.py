@@ -2,8 +2,9 @@ import argparse
 import cv2
 import sys
 import numpy as np
+import pytesseract
 
-DEBUG = True
+DEBUG = False
 cv_version = cv2.__version__
 rectangle_epsilon = 0.5
 position_epsilon = 0.25
@@ -55,9 +56,9 @@ def findContours(image):
 
     if DEBUG:
         pass
-        # cv2.imshow("Canny edge detector", edge)
-        # cv2.imshow("Dilation", dilated)
         # cv2.imshow("Blurred", blurred)
+        # cv2.imshow("Dilation", dilated)
+        # cv2.imshow("Canny edge detector", edge)
 
     # Find contours
     if (cv_version[0] == '4'):
@@ -73,7 +74,7 @@ def findContours(image):
 # Read image file
 image = cv2.imread(args["input"])
 if image is None:
-    sys.exit("0")
+    sys.exit("File not found!")
 
 contours, hierarchy = findContours(image)
 
@@ -81,7 +82,11 @@ contours, hierarchy = findContours(image)
 
 # =====Crop by the largest contours=====
 cropImgage = image[y:y+h, x:x+w]
-cv2.imwrite(args["output"], cropImgage)
+text = pytesseract.image_to_string(cropImgage)
+if (text != ''):
+    cv2.imwrite(args["output"], cropImgage)
+else:
+    cv2.imwrite(args["output"], image)
 
 
 
@@ -89,6 +94,8 @@ cv2.imwrite(args["output"], cropImgage)
 
 
 if DEBUG:
+    print('|' + text + '|')
+
     # =====Show original image and its size=====
     cv2.imshow("Original", image)
     print((image.shape[0], image.shape[1]))
