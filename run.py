@@ -2,7 +2,6 @@ import argparse
 import cv2
 import sys
 import numpy as np
-import pytesseract
 
 DEBUG = False
 cv_version = cv2.__version__
@@ -82,11 +81,8 @@ contours, hierarchy = findContours(image)
 
 # =====Crop by the largest contours=====
 cropImgage = image[y:y+h, x:x+w]
-text = pytesseract.image_to_string(cropImgage)
-if (text != ''):
-    cv2.imwrite(args["output"], cropImgage)
-else:
-    cv2.imwrite(args["output"], image)
+
+cv2.imwrite(args["output"], cropImgage)
 
 
 
@@ -94,7 +90,6 @@ else:
 
 
 if DEBUG:
-    print('|' + text + '|')
 
     # =====Show original image and its size=====
     cv2.imshow("Original", image)
