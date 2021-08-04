@@ -3,9 +3,11 @@ import cv2
 import sys
 import numpy as np
 
+DEBUG = True
 cv_version = cv2.__version__
 rectangle_epsilon = 0.5
 position_epsilon = 0.25
+canny_threshold = 100
 
 ap = argparse.ArgumentParser()
 ap.add_argument("-i", "--input", required = True, help = "Path to the input image")
@@ -27,8 +29,11 @@ def findTheLargestRect(contours, imageW, imageH):
             xMax = x
             yMax = y
 
-    print([xMax, yMax, wMax, hMax])
-    print(wMax/imageW)
+    if DEBUG:
+        pass
+        # print([xMax, yMax, wMax, hMax])
+        # print(wMax/imageW)
+
     if (wMax/imageW > position_epsilon):
         return [xMax, yMax, wMax, hMax]
     else:
@@ -41,16 +46,18 @@ def findContours(image):
 
     # Blur image
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    # cv2.imshow("Blurred", blurred)
 
     # using the Canny edge detector
-    threshold = 100
-    edge = cv2.Canny(blurred, threshold, threshold * 2)
-    # cv2.imshow("Canny edge detector", edge)
+    edge = cv2.Canny(blurred, canny_threshold, canny_threshold * 2)
 
     # apply a dilation
     dilated = cv2.dilate(edge, None, iterations=1)
-    # cv2.imshow("Dilation", dilated)
+
+    if DEBUG:
+        pass
+        # cv2.imshow("Canny edge detector", edge)
+        # cv2.imshow("Dilation", dilated)
+        # cv2.imshow("Blurred", blurred)
 
     # Find contours
     if (cv_version[0] == '4'):
@@ -68,43 +75,53 @@ image = cv2.imread(args["input"])
 if image is None:
     sys.exit("0")
 
-# cv2.imshow("Original", image)
-print((image.shape[0], image.shape[1]))
-
 contours, hierarchy = findContours(image)
-# print(len(contours))
 
 [x, y, w, h] = findTheLargestRect(contours, image.shape[1], image.shape[0])
-print([x, y, w, h])
 
 # =====Crop by the largest contours=====
 cropImgage = image[y:y+h, x:x+w]
-# cv2.imshow('Crop image', cropImgage)
 cv2.imwrite(args["output"], cropImgage)
 
 
 
 
-# =====Draw contours=====
-# drawing = np.zeros((image.shape[0], image.shape[1], 3), dtype=np.uint8)
-# cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-# cv2.imshow('Final edge', image)
 
-# =====Draw all contours=====
-# for i in range(len(contours)):
-#     if i == 0:
-#         # print(contours[i])
-#         cv2.drawContours(drawing, contours, i, (0,0,255), 2, cv2.LINE_8, hierarchy, 0)
-#     else:
-#         cv2.drawContours(drawing, contours, i, (0,255,0), 2, cv2.LINE_8, hierarchy, 0)
-# cv2.imshow('all contours', drawing)
 
-# =====Draw contours bounding boxes=====
-# cv2.drawContours(image, contours, -1, (0,0,255), 3, cv2.LINE_8, hierarchy, 0)
-# bounding_boxes = [cv2.boundingRect(cnt) for cnt in contours]
-# for bbox in bounding_boxes:
-#      [x , y, w, h] = bbox
-#      cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-# cv2.imshow('bounding boxes', image)
+if DEBUG:
+    # =====Show original image and its size=====
+    cv2.imshow("Original", image)
+    print((image.shape[0], image.shape[1]))
 
-# cv2.waitKey(0)
+    # =====contours info=====
+    print(len(contours))
+
+    # =====the largest contours params=====
+    print([x, y, w, h])
+
+    # =====Draw contours=====
+    drawing = np.zeros((image.shape[0], image.shape[1], 3), dtype=np.uint8)
+    cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+    cv2.imshow('Final edge', image)
+
+    # =====Draw all contours=====
+    for i in range(len(contours)):
+        if i == 0:
+            # print(contours[i])
+            cv2.drawContours(drawing, contours, i, (0,0,255), 2, cv2.LINE_8, hierarchy, 0)
+        else:
+            cv2.drawContours(drawing, contours, i, (0,255,0), 2, cv2.LINE_8, hierarchy, 0)
+    cv2.imshow('all contours', drawing)
+
+    # =====Draw contours bounding boxes=====
+    cv2.drawContours(image, contours, -1, (0,0,255), 3, cv2.LINE_8, hierarchy, 0)
+    bounding_boxes = [cv2.boundingRect(cnt) for cnt in contours]
+    for bbox in bounding_boxes:
+         [x , y, w, h] = bbox
+         cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+    cv2.imshow('bounding boxes', image)
+
+    # =====Crop final image=====
+    cv2.imshow('Crop image', cropImgage)
+
+    cv2.waitKey(0)
