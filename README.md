@@ -24,6 +24,11 @@ Go to the project directory
   cd card-detection-with-opencv
 ```
 
+Install packages
+```bash
+pip install -r requirements.txt
+```
+
 Let's rock
 
 ```bash
