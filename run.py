@@ -1,6 +1,8 @@
 import argparse
 import cv2
 import sys
+import re
+import imutils
 import numpy as np
 import pytesseract
 
@@ -8,12 +10,73 @@ DEBUG = False
 cv_version = cv2.__version__
 rectangle_epsilon = 0.5
 position_epsilon = 0.25
+padding = 5
 
 ap = argparse.ArgumentParser()
 ap.add_argument("-i", "--input", required = True, help = "Path to the input image")
 ap.add_argument("-o", "--output", required = True, help = "Path to the output image")
 args = vars(ap.parse_args())
 
+# Find contours
+def findContours(image):
+    # Convert image to GrayScale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Blur image
+    blurred = cv2.GaussianBlur(gray, (11, 11), 0)
+
+    # apply Otsu's automatic thresholding which automatically determines
+    # the best threshold value
+    (T, threshInv) = cv2.threshold(blurred, 200, 255,
+        cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
+
+    # using the Canny edge detector
+    edge = cv2.Canny(blurred, T*0.5, T)
+
+    # apply a dilation
+    dilated = cv2.dilate(edge, None, iterations=1)
+
+    # if DEBUG:
+    #     cv2.imshow("Blurred", blurred)
+    #     cv2.imshow("Dilation", dilated)
+    #     cv2.imshow("Canny edge detector", edge)
+    #     cv2.imshow("Threshold", threshInv)
+    #     print('----')
+    #     print(T)
+    #     print('----')
+    # else:
+    #     pass
+
+    # Find contours
+    # ONLY get parrent contours with param RETR_EXTERNAL
+    if (cv_version[0] == '4'):
+        contours, hierarchy = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    else:
+        _, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    return [contours, hierarchy]
+
+def filterContoursWithTextOnly(contours):
+    res = []
+
+    for cnt in contours:
+        x, y, w, h = cv2.boundingRect(cnt)
+
+        cropImgage = image[y:y+h, x:x+w]
+        text = pytesseract.image_to_string(cropImgage)
+        if (text != ''):
+            res.append([x, y, w, h])
+
+    return res
+
+# rotate image
+def findRotationRotate(image):
+    try:
+        osd = pytesseract.image_to_osd(image)
+        return float(re.search('(?<=Rotate: )\d+', osd).group(0))
+    except Exception as error:
+        print('Caught this error: ' + repr(error))
+        return 0
 
 # Find the Largest Rectangle
 def findTheLargestRect(contours, imageW, imageH):
@@ -40,61 +103,9 @@ def findTheLargestRect(contours, imageW, imageH):
     else:
         return [0, 0, imageW, imageH]
 
-# Find contours
-def findContours(image):
-    # Convert image to GrayScale
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # Blur image
-    blurred = cv2.GaussianBlur(gray, (7, 7), 0)
-
-    # apply Otsu's automatic thresholding which automatically determines
-    # the best threshold value
-    (T, threshInv) = cv2.threshold(blurred, 200, 255,
-        cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
-
-    # using the Canny edge detector
-    edge = cv2.Canny(blurred, T*0.5, T)
-    # edge = autoCanny(blurred, sigma=float(args["sigma"]))
-
-    # apply a dilation
-    dilated = cv2.dilate(edge, None, iterations=1)
-
-    if DEBUG:
-        cv2.imshow("Blurred", blurred)
-        cv2.imshow("Dilation", dilated)
-        cv2.imshow("Canny edge detector", edge)
-        cv2.imshow("Threshold", threshInv)
-        print('----')
-        print(T)
-        print('----')
-    else:
-        pass
-
-
-    # Find contours
-    # ONLY get parrent contours with param RETR_EXTERNAL
-    if (cv_version[0] == '4'):
-        contours, hierarchy = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    else:
-        _, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    return [contours, hierarchy]
-
-def filterContoursWithTextOnly(contours):
-    res = []
-
-    for cnt in contours:
-        x, y, w, h = cv2.boundingRect(cnt)
-
-        cropImgage = image[y:y+h, x:x+w]
-        text = pytesseract.image_to_string(cropImgage)
-        if (text != ''):
-            res.append([x, y, w, h])
-
-    return res
-
+# Find the Largest Bounding Box
 def findTheLargestBoundingBox(contours, imageW, imageH):
+    boundingBoxWithText = []
     xMin = imageW
     yMin = imageH
     xMax = -1
@@ -106,12 +117,19 @@ def findTheLargestBoundingBox(contours, imageW, imageH):
         cropImgage = image[y:y+h, x:x+w]
         text = pytesseract.image_to_string(cropImgage)
         if (text != ''):
+            boundingBoxWithText.append([x, y, w, h])
+
+    print(boundingBoxWithText)
+    if (len(boundingBoxWithText) == 0):
+        return findTheLargestRect(contours, imageW, imageH)
+    else:
+        for [x, y, w, h] in boundingBoxWithText:
             xMin = x if x < xMin else xMin
             xMax = (x + w) if (x + w) > xMax else xMax
             yMin = y if y < yMin else yMin
             yMax = (y + h) if (y + h) > yMax else yMax
 
-    return [xMin, yMin, xMax - xMin, yMax - yMin]
+        return [xMin, yMin, xMax - xMin + padding, yMax - yMin + padding]
 
 #================================================================================================
 # MAIN PROGRAM
@@ -120,6 +138,9 @@ def findTheLargestBoundingBox(contours, imageW, imageH):
 image = cv2.imread(args["input"])
 if image is None:
     sys.exit("File not found!")
+
+angle = findRotationRotate(image)
+image = imutils.rotate_bound(image, angle)
 
 contours, hierarchy = findContours(image)
 
@@ -131,9 +152,7 @@ cv2.imwrite(args["output"], cropImgage)
 
 
 
-
 if DEBUG:
-
     # =====Show original image and its size=====
     cv2.imshow("Original", image)
     print((image.shape[0], image.shape[1]))
