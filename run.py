@@ -8,7 +8,6 @@ DEBUG = False
 cv_version = cv2.__version__
 rectangle_epsilon = 0.5
 position_epsilon = 0.25
-canny_threshold = 80
 
 ap = argparse.ArgumentParser()
 ap.add_argument("-i", "--input", required = True, help = "Path to the input image")
@@ -124,16 +123,6 @@ if image is None:
 
 contours, hierarchy = findContours(image)
 
-# contours = filterContoursWithTextOnly(contours)
-# for [x, y, w, h] in contours:
-#     print([x, y, w, h])
-
-#     cropImgage = image[y:y+h, x:x+w]
-#     # print('[' + text + ']')
-#     name = './out/' + str(x) + str(y) + str(w) + str(h) + '.png'
-#     # print('Exported ' + name)
-#     cv2.imwrite(name, cropImgage)
-
 [x, y, w, h] = findTheLargestBoundingBox(contours, image.shape[1], image.shape[0])
 
 # =====Crop by the largest contours=====
@@ -146,11 +135,11 @@ cv2.imwrite(args["output"], cropImgage)
 if DEBUG:
 
     # =====Show original image and its size=====
-    # cv2.imshow("Original", image)
-    # print((image.shape[0], image.shape[1]))
+    cv2.imshow("Original", image)
+    print((image.shape[0], image.shape[1]))
 
     # =====contours info=====
-    # print(len(contours))
+    print(len(contours))
 
     # =====the largest contours params=====
     print([x, y, w, h])
@@ -167,7 +156,7 @@ if DEBUG:
             cv2.drawContours(drawing, contours, i, (0,0,255), 2, cv2.LINE_8, hierarchy, 0)
         else:
             cv2.drawContours(drawing, contours, i, (0,255,0), 2, cv2.LINE_8, hierarchy, 0)
-    # cv2.imshow('all contours', drawing)
+    cv2.imshow('all contours', drawing)
 
     # =====Draw contours bounding boxes=====
     cv2.drawContours(image, contours, -1, (0,0,255), 3, cv2.LINE_8, hierarchy, 0)
@@ -175,9 +164,9 @@ if DEBUG:
     for bbox in bounding_boxes:
          [x , y, w, h] = bbox
          cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-    # cv2.imshow('bounding boxes', image)
+    cv2.imshow('bounding boxes', image)
 
     # =====Crop final image=====
-    # cv2.imshow('Crop image', cropImgage)
+    cv2.imshow('Crop image', cropImgage)
 
     cv2.waitKey(0)
