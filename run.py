@@ -69,7 +69,7 @@ def getTextBoudingBox(path):
     return [(vertex.x, vertex.y) for vertex in texts[0].bounding_poly.vertices]
 
     if response.error.message:
-        return [0,0,0,0]
+        return [(0,0), (0,0), (0,0), (0,0)]
 
 def filterBoundingBox(contours):
     res = []
