@@ -1,21 +1,28 @@
 import argparse
 import cv2
 import sys
-import re
-import imutils
 import numpy as np
-import pytesseract
+from google.cloud import vision
+import io
+import os
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="./config.json"
 
 DEBUG = False
 cv_version = cv2.__version__
 rectangle_epsilon = 0.5
 position_epsilon = 0.25
-padding = 5
+canny_threshold = 100
+stdW = 25
+stdH = 25
+padding = 50
 
 ap = argparse.ArgumentParser()
 ap.add_argument("-i", "--input", required = True, help = "Path to the input image")
 ap.add_argument("-o", "--output", required = True, help = "Path to the output image")
 args = vars(ap.parse_args())
+
+def distance(v1, v2):
+    return np.sqrt(np.sum((v1 - v2) ** 2))
 
 # Find contours
 def findContours(image):
@@ -23,60 +30,56 @@ def findContours(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     # Blur image
-    blurred = cv2.GaussianBlur(gray, (11, 11), 0)
-
-    # apply Otsu's automatic thresholding which automatically determines
-    # the best threshold value
-    (T, threshInv) = cv2.threshold(blurred, 200, 255,
-        cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
 
     # using the Canny edge detector
-    edge = cv2.Canny(blurred, T*0.5, T)
+    edge = cv2.Canny(blurred, canny_threshold, canny_threshold * 2)
 
     # apply a dilation
     dilated = cv2.dilate(edge, None, iterations=1)
 
-    # if DEBUG:
-    #     cv2.imshow("Blurred", blurred)
-    #     cv2.imshow("Dilation", dilated)
-    #     cv2.imshow("Canny edge detector", edge)
-    #     cv2.imshow("Threshold", threshInv)
-    #     print('----')
-    #     print(T)
-    #     print('----')
-    # else:
-    #     pass
+    if DEBUG:
+        pass
+        # cv2.imshow("Blurred", blurred)
+        # cv2.imshow("Dilation", dilated)
+        # cv2.imshow("Canny edge detector", edge)
 
     # Find contours
-    # ONLY get parrent contours with param RETR_EXTERNAL
     if (cv_version[0] == '4'):
-        contours, hierarchy = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, hierarchy = cv2.findContours(dilated, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     else:
-        _, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        _, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
     return [contours, hierarchy]
 
-def filterContoursWithTextOnly(contours):
+def getTextBoudingBox(path):
+    """Get bounding box of all text in image"""
+    client = vision.ImageAnnotatorClient()
+
+    with io.open(path, 'rb') as image_file:
+        content = image_file.read()
+
+    image = vision.Image(content=content)
+
+    response = client.text_detection(image=image)
+    texts = response.text_annotations
+
+    minLenTopLeft = 100000
+    maxLenBottomRight = 0
+    return [(vertex.x, vertex.y) for vertex in texts[0].bounding_poly.vertices]
+
+    if response.error.message:
+        return [0,0,0,0]
+
+def filterBoundingBox(contours):
     res = []
 
     for cnt in contours:
         x, y, w, h = cv2.boundingRect(cnt)
-
-        cropImgage = image[y:y+h, x:x+w]
-        text = pytesseract.image_to_string(cropImgage)
-        if (text != ''):
+        if (w > stdW and h > stdH):
             res.append([x, y, w, h])
 
     return res
-
-# rotate image
-def findRotationRotate(image):
-    try:
-        osd = pytesseract.image_to_osd(image)
-        return float(re.search('(?<=Rotate: )\d+', osd).group(0))
-    except Exception as error:
-        print('Caught this error: ' + repr(error))
-        return 0
 
 # Find the Largest Rectangle
 def findTheLargestRect(contours, imageW, imageH):
@@ -85,8 +88,12 @@ def findTheLargestRect(contours, imageW, imageH):
     wMax = 0
     hMax = 0
 
-    for cnt in contours:
-        x, y, w, h = cv2.boundingRect(cnt)
+    boundingBoxes = filterBoundingBox(contours)
+    points = getTextBoudingBox(args['input'])
+    # print(points)
+    # print(boundingBoxes)
+
+    for [x, y, w, h] in boundingBoxes:
         if (w >= wMax and h >= hMax and h/w >= rectangle_epsilon):
             wMax = w
             hMax = h
@@ -99,60 +106,48 @@ def findTheLargestRect(contours, imageW, imageH):
         # print(wMax/imageW)
 
     if (wMax/imageW > position_epsilon):
+        # use the largest bounding box
+        if (xMax + wMax < points[1][0]):
+            wMax = points[1][0] - xMax + padding
+
+        if (yMax + hMax < points[2][1]):
+            hMax = points[2][1] - yMax + padding
+
         return [xMax, yMax, wMax, hMax]
     else:
-        return [0, 0, imageW, imageH]
+        # use bounding box from GG Vision
+        print('use bounding box from GG Vision')
+        xMax = int(points[0][0] - points[0][0]/2)
+        yMax = int(points[0][1] - points[0][1]/2)
+        wMax = int(distance(np.array(points[0]), np.array(points[1]))) + 2*padding
+        hMax = int(distance(np.array(points[0]), np.array(points[3]))) + 2*padding
 
-# Find the Largest Bounding Box
-def findTheLargestBoundingBox(contours, imageW, imageH):
-    boundingBoxWithText = []
-    xMin = imageW
-    yMin = imageH
-    xMax = -1
-    yMax = -1
-
-    for cnt in contours:
-        x, y, w, h = cv2.boundingRect(cnt)
-
-        cropImgage = image[y:y+h, x:x+w]
-        text = pytesseract.image_to_string(cropImgage)
-        if (text != ''):
-            boundingBoxWithText.append([x, y, w, h])
-
-    print(boundingBoxWithText)
-    if (len(boundingBoxWithText) == 0):
-        return findTheLargestRect(contours, imageW, imageH)
-    else:
-        for [x, y, w, h] in boundingBoxWithText:
-            xMin = x if x < xMin else xMin
-            xMax = (x + w) if (x + w) > xMax else xMax
-            yMin = y if y < yMin else yMin
-            yMax = (y + h) if (y + h) > yMax else yMax
-
-        return [xMin, yMin, xMax - xMin + padding, yMax - yMin + padding]
+        return [xMax, yMax, wMax, hMax]
 
 #================================================================================================
 # MAIN PROGRAM
 #================================================================================================
 # Read image file
+print("########################################################################")
+print('process file {}'.format(args["input"]))
 image = cv2.imread(args["input"])
 if image is None:
     sys.exit("File not found!")
 
-angle = findRotationRotate(image)
-image = imutils.rotate_bound(image, angle)
-
 contours, hierarchy = findContours(image)
-
-[x, y, w, h] = findTheLargestBoundingBox(contours, image.shape[1], image.shape[0])
+[x, y, w, h] = findTheLargestRect(contours, image.shape[1], image.shape[0])
 
 # =====Crop by the largest contours=====
 cropImgage = image[y:y+h, x:x+w]
 cv2.imwrite(args["output"], cropImgage)
+print("########################################################################")
+
+
 
 
 
 if DEBUG:
+
     # =====Show original image and its size=====
     cv2.imshow("Original", image)
     print((image.shape[0], image.shape[1]))
@@ -164,18 +159,18 @@ if DEBUG:
     print([x, y, w, h])
 
     # =====Draw contours=====
-    drawing = np.zeros((image.shape[0], image.shape[1], 3), dtype=np.uint8)
     cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
     cv2.imshow('Final edge', image)
 
     # =====Draw all contours=====
-    for i in range(len(contours)):
-        if i == 0:
-            # print(contours[i])
-            cv2.drawContours(drawing, contours, i, (0,0,255), 2, cv2.LINE_8, hierarchy, 0)
-        else:
-            cv2.drawContours(drawing, contours, i, (0,255,0), 2, cv2.LINE_8, hierarchy, 0)
-    cv2.imshow('all contours', drawing)
+    # drawing = np.zeros((image.shape[0], image.shape[1], 3), dtype=np.uint8)
+    # for i in range(len(contours)):
+    #     if i == 0:
+    #         # print(contours[i])
+    #         cv2.drawContours(drawing, contours, i, (0,0,255), 2, cv2.LINE_8, hierarchy, 0)
+    #     else:
+    #         cv2.drawContours(drawing, contours, i, (0,255,0), 2, cv2.LINE_8, hierarchy, 0)
+    # cv2.imshow('all contours', drawing)
 
     # =====Draw contours bounding boxes=====
     cv2.drawContours(image, contours, -1, (0,0,255), 3, cv2.LINE_8, hierarchy, 0)
@@ -183,6 +178,11 @@ if DEBUG:
     for bbox in bounding_boxes:
          [x , y, w, h] = bbox
          cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+    cv2.imshow('bounding boxes', image)
+
+    # =====Draw bounding boxes by GG Vison=====
+    points = getTextBoudingBox(args["input"])
+    cv2.rectangle(image, points[0], points[2], (255, 0, 0), 2)
     cv2.imshow('bounding boxes', image)
 
     # =====Crop final image=====

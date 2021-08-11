@@ -4,11 +4,9 @@
 A Python code that allowed detect namecard, business card, ATM/VISA card border using OpenCV library
 
 
-
-
 ## Installation
 
-You need to install OpenCV version 3.x.x or 4.x.x
+You need to install OpenCV version 3.x.x or 4.x.x and Google Vision SDK (take a look in References)
 
 ## Run
 
@@ -29,11 +27,18 @@ Install packages
 pip install -r requirements.txt
 ```
 
+Set the environment variable `GOOGLE_APPLICATION_CREDENTIALS` to the path of the JSON file that contains your service account key
+
 Let's rock
 
 ```bash
   python run.py -i c8.jpg -o o8.jpg
 ```
+
+
+## References
+- https://cloud.google.com/vision/docs/quickstart-client-libraries
+- https://cloud.google.com/vision/docs/ocr#vision_text_detection-python
 
 ## Author
 **Dương Trần Hà Phương (Mr.)** - CEO [Công ty TNHH FPO](https://fpo.vn)
