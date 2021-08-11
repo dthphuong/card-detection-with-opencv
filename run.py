@@ -14,7 +14,7 @@ position_epsilon = 0.25
 canny_threshold = 100
 stdW = 25
 stdH = 25
-padding = 50
+padding = 25
 
 ap = argparse.ArgumentParser()
 ap.add_argument("-i", "--input", required = True, help = "Path to the input image")
@@ -72,14 +72,8 @@ def getTextBoudingBox(path):
         return [(0,0), (0,0), (0,0), (0,0)]
 
 def filterBoundingBox(contours):
-    res = []
-
-    for cnt in contours:
-        x, y, w, h = cv2.boundingRect(cnt)
-        if (w > stdW and h > stdH):
-            res.append([x, y, w, h])
-
-    return res
+    boundingBoxes = [list(cv2.boundingRect(cnt)) for cnt in contours]
+    return list(filter(lambda box: (box[2] > stdW and box[3] > stdH), boundingBoxes))
 
 # Find the Largest Rectangle
 def findTheLargestRect(contours, imageW, imageH):
@@ -100,18 +94,13 @@ def findTheLargestRect(contours, imageW, imageH):
             xMax = x
             yMax = y
 
-    if DEBUG:
-        pass
-        # print([xMax, yMax, wMax, hMax])
-        # print(wMax/imageW)
-
     if (wMax/imageW > position_epsilon):
         # use the largest bounding box
         if (xMax + wMax < points[1][0]):
-            wMax = points[1][0] - xMax + padding
+            wMax = (points[1][0] - xMax) + padding
 
         if (yMax + hMax < points[2][1]):
-            hMax = points[2][1] - yMax + padding
+            hMax = (points[2][1] - yMax) + padding
 
         return [xMax, yMax, wMax, hMax]
     else:
@@ -119,8 +108,8 @@ def findTheLargestRect(contours, imageW, imageH):
         print('use bounding box from GG Vision')
         xMax = int(points[0][0] - points[0][0]/2)
         yMax = int(points[0][1] - points[0][1]/2)
-        wMax = int(distance(np.array(points[0]), np.array(points[1]))) + 2*padding
-        hMax = int(distance(np.array(points[0]), np.array(points[3]))) + 2*padding
+        wMax = int(distance(np.array(points[0]), np.array(points[1]))) + padding
+        hMax = int(distance(np.array(points[0]), np.array(points[3]))) + padding
 
         return [xMax, yMax, wMax, hMax]
 
@@ -136,13 +125,15 @@ if image is None:
 
 contours, hierarchy = findContours(image)
 [x, y, w, h] = findTheLargestRect(contours, image.shape[1], image.shape[0])
-
+print([x, y, w, h])
+cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+cv2.imshow('Final edge', image)
 # =====Crop by the largest contours=====
 cropImgage = image[y:y+h, x:x+w]
 cv2.imwrite(args["output"], cropImgage)
 print("########################################################################")
 
-
+cv2.waitKey(0)
 
 
 
