@@ -11,4 +11,8 @@ python run.py -i c10.png -o ./out/o10.png
 python run.py -i c11.png -o ./out/o11.png
 python run.py -i c12.jpg -o ./out/o12.jpg
 python run.py -i c13.png -o ./out/o13.png
+python run.py -i o14.jpg -o ./out/o14.jpg
 python run.py -i card.jpg -o ./out/oCard.jpg
+python run.py -i w1.png -o ./out/w1.png
+python run.py -i w2.png -o ./out/w2.png
+python run.py -i w3.png -o ./out/w3.png

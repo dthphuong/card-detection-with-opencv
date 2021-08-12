@@ -7,24 +7,19 @@ import io
 import os
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="./config.json"
 
-DEBUG = True
+ap = argparse.ArgumentParser()
+ap.add_argument("-i", "--input", required = True, help = "Path to the input image")
+ap.add_argument("-o", "--output", required = True, help = "Path to the output image")
+ap.add_argument("-d", "--debug", required = False, help = "Debug status")
+args = vars(ap.parse_args())
+
+DEBUG = args["debug"] == 'True'
 cv_version = cv2.__version__
 rectangle_epsilon = 0.5
 position_epsilon = 0.25
 canny_threshold = 100
-stdW = 25
-stdH = 25
+stdW = 25; stdH = 25
 padding = 25
-
-xx = 0
-yy = 0
-ww = 0
-hh = 0
-
-ap = argparse.ArgumentParser()
-ap.add_argument("-i", "--input", required = True, help = "Path to the input image")
-ap.add_argument("-o", "--output", required = True, help = "Path to the output image")
-args = vars(ap.parse_args())
 
 def distance(v1, v2):
     return np.sqrt(np.sum((v1 - v2) ** 2))
@@ -85,18 +80,10 @@ def filterBoundingBox(contours):
 
 # Find the Largest Rectangle
 def findTheLargestRect(contours, imageW, imageH):
-    xMin = 0
-    yMin = 0
-    xMax = 0
-    yMax = 0
-    resW = 0
-    resH = 0
+    xMin = 0; yMin = 0; xMax = 0; yMax = 0; resW = 0; resH = 0
 
     points = getTextBoudingBox(args['input'])
-    xA_ = points[0][0]
-    yA_ = points[0][1]
-    xC_ = points[2][0]
-    yC_ = points[2][1]
+    xA_ = points[0][0]; yA_ = points[0][1]; xC_ = points[2][0]; yC_ = points[2][1]
     # print(points)
 
     if (points == [(0,0), (0,0), (0,0), (0,0)]):
@@ -104,13 +91,8 @@ def findTheLargestRect(contours, imageW, imageH):
         return [0, 0, imageW, imageH]
     else:
         # Found text
-        xA = 0
-        yA = 0
-        xC = 0
-        yC = 0
-        wMax = 0
-        hMax = 0
-        sMax = 0
+        xA = 0; yA = 0; xC = 0; yC = 0;
+        wMax = 0; hMax = 0; sMax = 0
 
         # finding the largest rectangle
         boundingBoxes = filterBoundingBox(contours)
@@ -118,12 +100,9 @@ def findTheLargestRect(contours, imageW, imageH):
         for [x, y, w, h] in boundingBoxes:
             if (w * h >= sMax): #and h/w >= rectangle_epsilon
                 sMax = w * h
-                wMax = w
-                hMax = h
-                xA = x
-                yA = y
-                xC = xA + wMax
-                yC = yA + hMax
+                wMax = w; hMax = h
+                xA = x; yA = y
+                xC = xA + wMax; yC = yA + hMax
 
         # finding the union rectangle
         xMin = xA if xA < xA_ else xA_
@@ -133,6 +112,11 @@ def findTheLargestRect(contours, imageW, imageH):
         resW = xMax - xMin
         resH = yMax - yMin
 
+        # refine rectangle with rectangle_epsilon
+        if (resH / resW < rectangle_epsilon):
+            yMin -= int((resW/2 - resH)/2)
+            resH += int((resW/2 - resH))
+
         # add padding around
         xMin -= padding
         yMin -= padding
@@ -140,25 +124,6 @@ def findTheLargestRect(contours, imageW, imageH):
         resH += padding*2
 
         return [xMin, yMin, resW, resH]
-
-        # if (wMax/imageW > position_epsilon):
-        #     # use the largest bounding box
-        #     if (xMax + wMax < points[1][0]):
-        #         wMax = (points[1][0] - xMax) + padding
-
-        #     if (yMax + hMax < points[2][1]):
-        #         hMax = (points[2][1] - yMax) + padding
-
-        #     return [xMax, yMax, wMax, hMax]
-        # else:
-        #     # use bounding box from GG Vision
-        #     print('use bounding box from GG Vision')
-        #     xMax = int(points[0][0] - points[0][0]/2)
-        #     yMax = int(points[0][1] - points[0][1]/2)
-        #     wMax = int(distance(np.array(points[0]), np.array(points[1]))) + padding
-        #     hMax = int(distance(np.array(points[0]), np.array(points[3]))) + padding
-
-        #     return [xMax, yMax, wMax, hMax]
 
 def findGreenRect(contours, imageW, imageH):
     xMin = 0
@@ -196,31 +161,27 @@ def findGreenRect(contours, imageW, imageH):
 # MAIN PROGRAM
 #================================================================================================
 # Read image file
-print("########################################################################")
+print('=======DEBUG = {}======='.format(DEBUG))
+print("##########################################################")
 print('process file {}'.format(args["input"]))
 image = cv2.imread(args["input"])
 if image is None:
     sys.exit("File not found!")
 
 contours, hierarchy = findContours(image)
+
 [x, y, w, h] = findTheLargestRect(contours, image.shape[1], image.shape[0])
 print('Final rect: {}'.format([x, y, w, h]))
-cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 5)
-
-[xx, yy, ww, hh] = findGreenRect(contours, image.shape[1], image.shape[0])
-print('Green rect: {}'.format([xx, yy, ww, hh]))
-cv2.rectangle(image, (xx, yy), (xx + ww, yy + hh), (0, 255, 0), 5)
-
+# cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 5)
 
 # =====Crop by the largest contours=====
 cropImgage = image[y:y+h, x:x+w]
 cv2.imwrite(args["output"], cropImgage)
-print("########################################################################")
+print("##########################################################")
 
 
 
 if DEBUG:
-
     # =====Show original image and its size=====
     # cv2.imshow("Original", image)
     # print((image.shape[0], image.shape[1]))
@@ -253,13 +214,20 @@ if DEBUG:
          cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 255), 2)
     # cv2.imshow('bounding boxes', image)
 
+
+    # =====Green rect=====
+    [xx, yy, ww, hh] = findGreenRect(contours, image.shape[1], image.shape[0])
+    print('Green rect: {}'.format([xx, yy, ww, hh]))
+    cv2.rectangle(image, (xx, yy), (xx + ww, yy + hh), (0, 255, 0), 5)
+
     # =====Draw bounding boxes by GG Vison=====
     points = getTextBoudingBox(args["input"])
     cv2.rectangle(image, points[0], points[2], (255, 0, 0), 2)
     # cv2.imshow('GG Vison', image)
-    cv2.imwrite('./debug/' + args["input"], image)
 
     # =====Crop final image=====
     # cv2.imshow('Crop image', cropImgage)
+
+    cv2.imwrite('./debug/' + args["input"], image)
 
     cv2.waitKey(0)
