@@ -90,31 +90,34 @@ def findTheLargestRect(contours, imageW, imageH):
     # print(points)
     # print(boundingBoxes)
 
-    for [x, y, w, h] in boundingBoxes:
-        if (w >= wMax and h >= hMax and h/w >= rectangle_epsilon):
-            wMax = w
-            hMax = h
-            xMax = x
-            yMax = y
-
-    if (wMax/imageW > position_epsilon):
-        # use the largest bounding box
-        if (xMax + wMax < points[1][0]):
-            wMax = (points[1][0] - xMax) + padding
-
-        if (yMax + hMax < points[2][1]):
-            hMax = (points[2][1] - yMax) + padding
-
-        return [xMax, yMax, wMax, hMax]
+    if (points == [(0,0), (0,0), (0,0), (0,0)]):
+        return [0, 0, imageW, imageH]
     else:
-        # use bounding box from GG Vision
-        print('use bounding box from GG Vision')
-        xMax = int(points[0][0] - points[0][0]/2)
-        yMax = int(points[0][1] - points[0][1]/2)
-        wMax = int(distance(np.array(points[0]), np.array(points[1]))) + padding
-        hMax = int(distance(np.array(points[0]), np.array(points[3]))) + padding
+        for [x, y, w, h] in boundingBoxes:
+            if (w >= wMax and h >= hMax and h/w >= rectangle_epsilon):
+                wMax = w
+                hMax = h
+                xMax = x
+                yMax = y
 
-        return [xMax, yMax, wMax, hMax]
+        if (wMax/imageW > position_epsilon):
+            # use the largest bounding box
+            if (xMax + wMax < points[1][0]):
+                wMax = (points[1][0] - xMax) + padding
+
+            if (yMax + hMax < points[2][1]):
+                hMax = (points[2][1] - yMax) + padding
+
+            return [xMax, yMax, wMax, hMax]
+        else:
+            # use bounding box from GG Vision
+            print('use bounding box from GG Vision')
+            xMax = int(points[0][0] - points[0][0]/2)
+            yMax = int(points[0][1] - points[0][1]/2)
+            wMax = int(distance(np.array(points[0]), np.array(points[1]))) + padding
+            hMax = int(distance(np.array(points[0]), np.array(points[3]))) + padding
+
+            return [xMax, yMax, wMax, hMax]
 
 #================================================================================================
 # MAIN PROGRAM
