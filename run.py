@@ -64,9 +64,12 @@ def getTextBoudingBox(path):
     response = client.text_detection(image=image)
     texts = response.text_annotations
 
-    minLenTopLeft = 100000
-    maxLenBottomRight = 0
-    return [(vertex.x, vertex.y) for vertex in texts[0].bounding_poly.vertices]
+    if (len(texts) > 0):
+        minLenTopLeft = 100000
+        maxLenBottomRight = 0
+        return [(vertex.x, vertex.y) for vertex in texts[0].bounding_poly.vertices]
+    else:
+        return [(0,0), (0,0), (0,0), (0,0)]
 
     if response.error.message:
         return [(0,0), (0,0), (0,0), (0,0)]
