@@ -7,7 +7,7 @@ import io
 import os
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="./config.json"
 
-DEBUG = False
+DEBUG = True
 cv_version = cv2.__version__
 rectangle_epsilon = 0.5
 position_epsilon = 0.25
@@ -15,6 +15,11 @@ canny_threshold = 100
 stdW = 25
 stdH = 25
 padding = 25
+
+xx = 0
+yy = 0
+ww = 0
+hh = 0
 
 ap = argparse.ArgumentParser()
 ap.add_argument("-i", "--input", required = True, help = "Path to the input image")
@@ -80,44 +85,112 @@ def filterBoundingBox(contours):
 
 # Find the Largest Rectangle
 def findTheLargestRect(contours, imageW, imageH):
+    xMin = 0
+    yMin = 0
     xMax = 0
     yMax = 0
-    wMax = 0
-    hMax = 0
+    resW = 0
+    resH = 0
 
-    boundingBoxes = filterBoundingBox(contours)
     points = getTextBoudingBox(args['input'])
+    xA_ = points[0][0]
+    yA_ = points[0][1]
+    xC_ = points[2][0]
+    yC_ = points[2][1]
     # print(points)
-    # print(boundingBoxes)
 
     if (points == [(0,0), (0,0), (0,0), (0,0)]):
+        # Can't find text
         return [0, 0, imageW, imageH]
     else:
+        # Found text
+        xA = 0
+        yA = 0
+        xC = 0
+        yC = 0
+        wMax = 0
+        hMax = 0
+        sMax = 0
+
+        # finding the largest rectangle
+        boundingBoxes = filterBoundingBox(contours)
+        # print(boundingBoxes)
         for [x, y, w, h] in boundingBoxes:
-            if (w >= wMax and h >= hMax and h/w >= rectangle_epsilon):
+            if (w * h >= sMax): #and h/w >= rectangle_epsilon
+                sMax = w * h
                 wMax = w
                 hMax = h
-                xMax = x
-                yMax = y
+                xA = x
+                yA = y
+                xC = xA + wMax
+                yC = yA + hMax
 
-        if (wMax/imageW > position_epsilon):
-            # use the largest bounding box
-            if (xMax + wMax < points[1][0]):
-                wMax = (points[1][0] - xMax) + padding
+        # finding the union rectangle
+        xMin = xA if xA < xA_ else xA_
+        yMin = yA if yA < yA_ else yA_
+        xMax = xC if xC > xC_ else xC_
+        yMax = yC if yC > yC_ else yC_
+        resW = xMax - xMin
+        resH = yMax - yMin
 
-            if (yMax + hMax < points[2][1]):
-                hMax = (points[2][1] - yMax) + padding
+        # add padding around
+        xMin -= padding
+        yMin -= padding
+        resW += padding*2
+        resH += padding*2
 
-            return [xMax, yMax, wMax, hMax]
-        else:
-            # use bounding box from GG Vision
-            print('use bounding box from GG Vision')
-            xMax = int(points[0][0] - points[0][0]/2)
-            yMax = int(points[0][1] - points[0][1]/2)
-            wMax = int(distance(np.array(points[0]), np.array(points[1]))) + padding
-            hMax = int(distance(np.array(points[0]), np.array(points[3]))) + padding
+        return [xMin, yMin, resW, resH]
 
-            return [xMax, yMax, wMax, hMax]
+        # if (wMax/imageW > position_epsilon):
+        #     # use the largest bounding box
+        #     if (xMax + wMax < points[1][0]):
+        #         wMax = (points[1][0] - xMax) + padding
+
+        #     if (yMax + hMax < points[2][1]):
+        #         hMax = (points[2][1] - yMax) + padding
+
+        #     return [xMax, yMax, wMax, hMax]
+        # else:
+        #     # use bounding box from GG Vision
+        #     print('use bounding box from GG Vision')
+        #     xMax = int(points[0][0] - points[0][0]/2)
+        #     yMax = int(points[0][1] - points[0][1]/2)
+        #     wMax = int(distance(np.array(points[0]), np.array(points[1]))) + padding
+        #     hMax = int(distance(np.array(points[0]), np.array(points[3]))) + padding
+
+        #     return [xMax, yMax, wMax, hMax]
+
+def findGreenRect(contours, imageW, imageH):
+    xMin = 0
+    yMin = 0
+    xMax = 0
+    yMax = 0
+    resW = 0
+    resH = 0
+
+    # Found text
+    xA = 0
+    yA = 0
+    xC = 0
+    yC = 0
+    wMax = 0
+    hMax = 0
+    sMax = 0
+
+    # finding the largest rectangle
+    boundingBoxes = filterBoundingBox(contours)
+    # print(boundingBoxes)
+    for [x, y, w, h] in boundingBoxes:
+        if (w * h >= sMax ): #and h/w >= rectangle_epsilon
+            sMax = w * h
+            wMax = w
+            hMax = h
+            xA = x
+            yA = y
+            xC = xA + wMax
+            yC = yA + hMax
+
+    return [xA, yA, wMax, hMax]
 
 #================================================================================================
 # MAIN PROGRAM
@@ -131,33 +204,36 @@ if image is None:
 
 contours, hierarchy = findContours(image)
 [x, y, w, h] = findTheLargestRect(contours, image.shape[1], image.shape[0])
-print([x, y, w, h])
-cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-cv2.imshow('Final edge', image)
+print('Final rect: {}'.format([x, y, w, h]))
+cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 5)
+
+[xx, yy, ww, hh] = findGreenRect(contours, image.shape[1], image.shape[0])
+print('Green rect: {}'.format([xx, yy, ww, hh]))
+cv2.rectangle(image, (xx, yy), (xx + ww, yy + hh), (0, 255, 0), 5)
+
+
 # =====Crop by the largest contours=====
 cropImgage = image[y:y+h, x:x+w]
 cv2.imwrite(args["output"], cropImgage)
 print("########################################################################")
-
-cv2.waitKey(0)
 
 
 
 if DEBUG:
 
     # =====Show original image and its size=====
-    cv2.imshow("Original", image)
-    print((image.shape[0], image.shape[1]))
+    # cv2.imshow("Original", image)
+    # print((image.shape[0], image.shape[1]))
 
     # =====contours info=====
-    print(len(contours))
+    # print(len(contours))
 
     # =====the largest contours params=====
-    print([x, y, w, h])
+    # print([x, y, w, h])
 
     # =====Draw contours=====
-    cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-    cv2.imshow('Final edge', image)
+    # cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+    # cv2.imshow('Final edge', image)
 
     # =====Draw all contours=====
     # drawing = np.zeros((image.shape[0], image.shape[1], 3), dtype=np.uint8)
@@ -170,19 +246,20 @@ if DEBUG:
     # cv2.imshow('all contours', drawing)
 
     # =====Draw contours bounding boxes=====
-    cv2.drawContours(image, contours, -1, (0,0,255), 3, cv2.LINE_8, hierarchy, 0)
-    bounding_boxes = [cv2.boundingRect(cnt) for cnt in contours]
+    # cv2.drawContours(image, contours, -1, (0,0,255), 3, cv2.LINE_8, hierarchy, 0)
+    bounding_boxes = filterBoundingBox(contours)
     for bbox in bounding_boxes:
          [x , y, w, h] = bbox
-         cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-    cv2.imshow('bounding boxes', image)
+         cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 255), 2)
+    # cv2.imshow('bounding boxes', image)
 
     # =====Draw bounding boxes by GG Vison=====
     points = getTextBoudingBox(args["input"])
     cv2.rectangle(image, points[0], points[2], (255, 0, 0), 2)
-    cv2.imshow('bounding boxes', image)
+    # cv2.imshow('GG Vison', image)
+    cv2.imwrite('./debug/' + args["input"], image)
 
     # =====Crop final image=====
-    cv2.imshow('Crop image', cropImgage)
+    # cv2.imshow('Crop image', cropImgage)
 
     cv2.waitKey(0)
