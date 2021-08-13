@@ -114,14 +114,14 @@ def findTheLargestRect(contours, imageW, imageH):
 
         # refine rectangle with rectangle_epsilon
         if (resH / resW < rectangle_epsilon):
-            yMin -= int((resW/2 - resH)/2)
-            resH += int((resW/2 - resH))
+            yMin = (yMin - int((resW/2 - resH)/2)) if (yMin - int((resW/2 - resH)/2) > 0) else yMin
+            resH = (resH + int((resW/2 - resH))) if (resH + int((resW/2 - resH)) < imageH) else imageH
 
         # add padding around
-        xMin -= padding
-        yMin -= padding
-        resW += padding*2
-        resH += padding*2
+        xMin = (xMin - padding) if (xMin - padding > 0) else 0
+        yMin = (yMin - padding) if (yMin - padding > 0) else 0
+        resW = (resW + padding*2) if (resW + padding*2 < imageW) else imageW
+        resH = (resH + padding*2) if (resH + padding*2 < imageH) else imageH
 
         return [xMin, yMin, resW, resH]
 
@@ -170,9 +170,9 @@ if image is None:
 
 contours, hierarchy = findContours(image)
 
+points = getTextBoudingBox(args["input"])
+
 [x, y, w, h] = findTheLargestRect(contours, image.shape[1], image.shape[0])
-print('Final rect: {}'.format([x, y, w, h]))
-# cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 5)
 
 # =====Crop by the largest contours=====
 cropImgage = image[y:y+h, x:x+w]
@@ -182,6 +182,10 @@ print("##########################################################")
 
 
 if DEBUG:
+    # =====Final rect=====
+    print('Final rect: {}'.format([x, y, w, h]))
+    cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 5)
+
     # =====Show original image and its size=====
     # cv2.imshow("Original", image)
     # print((image.shape[0], image.shape[1]))
@@ -221,7 +225,6 @@ if DEBUG:
     cv2.rectangle(image, (xx, yy), (xx + ww, yy + hh), (0, 255, 0), 5)
 
     # =====Draw bounding boxes by GG Vison=====
-    points = getTextBoudingBox(args["input"])
     cv2.rectangle(image, points[0], points[2], (255, 0, 0), 2)
     # cv2.imshow('GG Vison', image)
 
